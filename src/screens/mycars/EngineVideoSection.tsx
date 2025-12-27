@@ -32,7 +32,7 @@ const EngineVideoSection: React.FC<EngineVideoSectionProps> = ({
     try {
       const docType = 'EngineVideo';
       const response = await fetch(
-        `  http://10.37.206.200:8086/uploadFileBidCar/getBidCarIdType?beadingCarId=${beadingCarId}&docType=${docType}`,
+        `  https://car03.dostenterprises.com/uploadFileBidCar/getBidCarIdType?beadingCarId=${beadingCarId}&docType=${docType}`,
       );
       const text = await response.text();
       const data = JSON.parse(text);

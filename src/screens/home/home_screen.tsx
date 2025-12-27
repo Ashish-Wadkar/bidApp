@@ -1,4 +1,4 @@
-// HomeScreen.tsx - COMPLETE FIXED VERSION (WebSocket Integration Corrected)
+ 
 import React, {useState, useEffect, useRef, useCallback} from 'react';
 import {
   View,
@@ -143,30 +143,59 @@ const HomeScreen: React.FC = () => {
     connectionError,
     connectionStatus,
     testConnection,
+    placeBid,
   } = useWebSocket();
 
   // === NOTIFICATION SYSTEM ===
   const showNotification = useCallback(
-    (car: Car, type: 'bid' | 'outbid' | 'won' | 'time') => {
+    (
+      car: Car,
+      type: 'bid' | 'outbid' | 'won' | 'time',
+      overrideAmount?: number,
+    ) => {
       const carName = `${car.make || 'Toyota'} ${car.model || 'Innova'} ${
         car.variant || '2.8 ZX'
       }`;
+
+      // Compute effective latest price for this car (same logic as in card UI)
+      const carId = car.id;
+      const bidId = (car as any).bidCarId || carId;
+      const priceKey = bidId || carId;
+      const livePriceData = livePrices[priceKey];
+      const details =
+        carDetailsData[carId] ||
+        (bidId ? carDetailsData[bidId as string] : undefined);
+      const basePrice = (car as any).basePrice;
+
+      let effectivePrice =
+        livePriceData && typeof livePriceData.price === 'number' && livePriceData.price > 0
+          ? livePriceData.price
+          : typeof (car as any).currentBid === 'number' &&
+            (car as any).currentBid > 0
+          ? (car as any).currentBid
+          : typeof details?.price === 'number' && details.price > 0
+          ? details.price
+          : typeof basePrice === 'number' && basePrice > 0
+          ? basePrice
+          : 0;
+
+      // If caller knows the exact latest bid (e.g. after placing a bid), trust that
+      if (overrideAmount && overrideAmount > 0) {
+        effectivePrice = overrideAmount;
+      }
+
       let message = '';
       switch (type) {
         case 'bid':
-          message = `You placed a bid on ${carName} at ₹${(
-            livePrices[car.id]?.price || 0
-          ).toLocaleString()}`;
+          message = `You placed a bid on ${carName} at ₹${effectivePrice.toLocaleString()}`;
           break;
         case 'outbid':
           message = `You've been outbid on ${carName}! New bid: ₹${(
-            (livePrices[car.id]?.price || 0) + 5000
+            effectivePrice + 5000
           ).toLocaleString()}`;
           break;
         case 'won':
-          message = `Congratulations! You won ${carName} for ₹${(
-            livePrices[car.id]?.price || 0
-          ).toLocaleString()}`;
+          message = `Congratulations! You won ${carName} for ₹${effectivePrice.toLocaleString()}`;
           break;
         case 'time':
           message = `Only 5 minutes left for ${carName}!`;
@@ -187,6 +216,7 @@ const HomeScreen: React.FC = () => {
         easing: Easing.out(Easing.quad),
         useNativeDriver: true,
       }).start();
+
       setTimeout(() => {
         Animated.timing(notificationAnim, {
           toValue: -100,
@@ -195,13 +225,13 @@ const HomeScreen: React.FC = () => {
         }).start(() => {
           setNotifications(prev => prev.filter(n => n.id !== newNotif.id));
         });
-      }, 4000);
+     }, 4000);
     },
-    [livePrices, notificationAnim],
+    [livePrices, carDetailsData, notificationAnim],
   );
 
   const handleNotificationClick = () => {
-    // Test connection when notification icon is clicked
+    // Test connection when notification icon is clicked 
     testConnection();
     if (filteredLiveCars.length === 0) {
       Alert.alert('No Cars', 'No live cars to show demo notifications.');
@@ -257,14 +287,73 @@ const HomeScreen: React.FC = () => {
     )}:${String(seconds).padStart(2, '0')}`;
   }, []);
 
-  // === IMMEDIATE CAR DISPLAY (FALLBACK) ===
+  // === IMMEDIATE CAR DISPLAY (FALLBACK) + LIVE PRICE SYNC ===
   useEffect(() => {
-    // Set filteredLiveCars immediately when liveCars changes
-    if (liveCars.length > 0) {
-      console.log('🚗 WebSocket liveCars count:', liveCars.length);
-      setFilteredLiveCars(liveCars);
-      setIsLoading(false);
+    // Whenever liveCars changes from WebSocket, immediately reflect it in UI
+    console.log('🚗 WebSocket liveCars count:', liveCars.length);
+    setFilteredLiveCars(liveCars);
+    setIsLoading(false);
+
+    if (liveCars.length === 0) {
+      return;
     }
+
+    // Also sync latest bid amounts from liveCars into local livePrices state
+    // IMPORTANT: never lower the price here. We only accept equal or higher values
+    // than what we already have in livePrices.
+    setLivePrices(prev => {
+      const updated: {[key: string]: LivePriceData} = {...prev};
+
+      liveCars.forEach(car => {
+        const bidId = car.bidCarId || car.id;
+        if (!bidId) return;
+        const key = String(bidId);
+
+        const numericBid =
+          typeof car.currentBid === 'number'
+            ? car.currentBid
+            : typeof car.highestBid === 'number'
+            ? car.highestBid
+            : typeof (car as any).price === 'number'
+            ? (car as any).price
+            : undefined;
+
+        const existing = updated[key];
+        const existingPrice =
+          typeof existing?.price === 'number' ? existing.price : undefined;
+
+        // If we have no new bid value from WebSocket, or it would lower the
+        // currently known price, keep the existing price.
+        let nextPrice: number | undefined = numericBid;
+        if (
+          existingPrice !== undefined &&
+          existingPrice > 0 &&
+          (numericBid === undefined || numericBid <= existingPrice)
+        ) {
+          nextPrice = existingPrice;
+        }
+
+        if (nextPrice === undefined) {
+          return;
+        }
+
+        updated[key] = {
+          price: nextPrice,
+          remainingTime: existing?.remainingTime,
+          timeLeft: existing?.timeLeft,
+          auctionStartTime:
+            existing?.auctionStartTime ||
+            (car.auctionStartTime as string | undefined) ||
+            (car.startTime as string | undefined),
+          auctionEndTime:
+            existing?.auctionEndTime ||
+            (car.auctionEndTime as string | undefined) ||
+            (car.endTime as string | undefined),
+        };
+      });
+
+      return updated;
+    });
   }, [liveCars]);
 
   // === AUCTION TIME LOGIC ===
@@ -359,20 +448,22 @@ const HomeScreen: React.FC = () => {
         AsyncStorage.getItem(TOKEN_KEY),
         AsyncStorage.getItem(USER_ID_KEY),
       ]);
-      
+
       if (token) {
         setStoredToken(token);
         console.log('🔑 Loaded token from storage');
-        
+
         // ✅ FIXED: Only connect with stored token if no route token exists
         if (!routeParams?.token && !connectionInitializedRef.current) {
-          console.log('🔗 Initiating WebSocket connection with stored token...');
+          console.log(
+            '🔗 Initiating WebSocket connection with stored token...',
+          );
           connectionInitializedRef.current = true;
           lastConnectionTokenRef.current = token;
           connectWebSocket(token);
         }
       }
-      
+
       if (userId) setStoredUserId(userId);
     } catch (error) {
       console.error('❌ Error loading auth data:', error);
@@ -381,8 +472,13 @@ const HomeScreen: React.FC = () => {
 
   // ✅ FIXED: Handle route params (from login) - PRIMARY CONNECTION
   useEffect(() => {
-    if (routeParams?.token && routeParams.token !== lastConnectionTokenRef.current) {
-      console.log('🔗 PRIMARY: Initiating WebSocket connection with route token...');
+    if (
+      routeParams?.token &&
+      routeParams.token !== lastConnectionTokenRef.current
+    ) {
+      console.log(
+        '🔗 PRIMARY: Initiating WebSocket connection with route token...',
+      );
       connectionInitializedRef.current = true;
       lastConnectionTokenRef.current = routeParams.token;
       connectWebSocket(routeParams.token);
@@ -435,26 +531,23 @@ const HomeScreen: React.FC = () => {
     }
   };
 
-  const handleRetry = () => {
-    console.log('🔄 Retry connection...');
-    setIsLoading(true);
-    if (token) {
-      connectWebSocket(token);
-    } else {
-      Alert.alert('Authentication Required', 'Please login again.');
-    }
-  };
-
   // === API CALLS ===
   const fetchLivePrice = async (
     bidCarId: string,
+    keyForState?: string,
   ): Promise<LivePriceData | null> => {
     try {
-      const livePriceUrl = `http://10.37.206.200:8086/Bid/getliveValue?bidCarId=${bidCarId}`;
+      const livePriceUrl = `https://car03.dostenterprises.com/Bid/getliveValue?bidCarId=${bidCarId}`;
       const response = await fetch(livePriceUrl);
       const data = await response.json();
-      const price = data?.object?.price ?? 0;
-      const livePriceData = {
+      const rawPrice = data?.object?.price;
+      const price =
+        typeof rawPrice === 'number'
+          ? rawPrice
+          : typeof rawPrice === 'string'
+          ? parseFloat(rawPrice)
+          : 0;
+      const livePriceData: LivePriceData = {
         price,
         remainingTime: data?.object?.remainingTime || '',
         timeLeft: data?.object?.timeLeft || '',
@@ -462,7 +555,8 @@ const HomeScreen: React.FC = () => {
           data?.object?.auctionStartTime || data?.object?.startTime,
         auctionEndTime: data?.object?.auctionEndTime || data?.object?.endTime,
       };
-      setLivePrices(prev => ({...prev, [bidCarId]: livePriceData}));
+      const key = keyForState || bidCarId;
+      setLivePrices(prev => ({...prev, [key]: livePriceData}));
       return livePriceData;
     } catch (error) {
       console.error(`Error fetching live price for ${bidCarId}:`, error);
@@ -473,7 +567,11 @@ const HomeScreen: React.FC = () => {
   const refreshAllCarPrices = async () => {
     console.log('💰 Refreshing all car prices...');
     const promises = filteredLiveCars.map(car => {
-      if (car.id) return fetchLivePrice(car.id);
+      const bidId = car.bidCarId || car.id;
+      if (bidId) {
+        // Always key livePrices by bidCarId so it matches WebSocket mapping
+        return fetchLivePrice(String(bidId), String(bidId));
+      }
       return Promise.resolve(null);
     });
     await Promise.all(promises);
@@ -484,7 +582,7 @@ const HomeScreen: React.FC = () => {
     bidCarId: string,
   ) => {
     try {
-      const imageUrl = `http://10.37.206.200:8086/uploadFileBidCar/getByBidCarID?beadingCarId=${beadingCarId}`;
+      const imageUrl = `https://car03.dostenterprises.com/uploadFileBidCar/getByBidCarID?beadingCarId=${beadingCarId}`;
       const imageResponse = await fetch(imageUrl);
       const imageText = await imageResponse.text();
       let imageDataArray: any[] = [];
@@ -507,7 +605,7 @@ const HomeScreen: React.FC = () => {
             item.subtype?.toLowerCase() === 'coverimage') &&
           String(item.beadingCarId) === String(beadingCarId),
       );
-      const carIdUrl = `http://10.37.206.200:8086/BeadingCarController/getByBidCarId/${bidCarId}`;
+      const carIdUrl = `https://car03.dostenterprises.com/BeadingCarController/getByBidCarId/${bidCarId}`;
       const carIdResponse = await fetch(carIdUrl);
       const carIdText = await carIdResponse.text();
       let carIdData: any = null;
@@ -695,6 +793,60 @@ const HomeScreen: React.FC = () => {
     setBiddingStates(prev => ({...prev, [selectedCar.bidCarId]: true}));
 
     try {
+      // 1) Try to place bid via WebSocket first (real-time path)
+      if (isConnected) {
+        try {
+          await placeBid({
+            userId: String(userId),
+            bidCarId: String(selectedCar.bidCarId),
+            amount: bidValue,
+          });
+
+          // Optimistically update this device with the new bid amount
+          const bidKey = String(selectedCar.bidCarId);
+          setLivePrices(prev => ({
+            ...prev,
+            [bidKey]: {
+              ...(prev[bidKey] || {}),
+              price: bidValue,
+            },
+          }));
+          setFilteredLiveCars(prev =>
+            prev.map(c =>
+              c.id === selectedCar.bidCarId || c.bidCarId === selectedCar.bidCarId
+                ? {...c, currentBid: bidValue}
+                : c,
+            ),
+          );
+
+          setModalVisible(false);
+          Alert.alert(
+            'Bid Placed Successfully!',
+            `Your bid of ₹${bidValue.toLocaleString()} has been placed.`,
+            [
+              {
+                text: 'OK',
+                onPress: () => {
+                  const car = filteredLiveCars.find(
+                    c =>
+                      c.id === selectedCar.bidCarId ||
+                      c.bidCarId === selectedCar.bidCarId,
+                  );
+                  if (car) showNotification(car, 'bid', bidValue);
+                },
+              },
+            ],
+          );
+
+          // WebSocket path succeeded, no need for HTTP fallback
+          return;
+        } catch (wsError) {
+          console.error('WebSocket placeBid failed, falling back to HTTP:', wsError);
+          // Fall through to HTTP path below
+        }
+      }
+
+      // 2) HTTP fallback (existing REST API) if WebSocket is not available
       const currentDateTime = getCurrentDateTimeForAPI();
       const requestBody = {
         userId: Number(userId),
@@ -703,7 +855,7 @@ const HomeScreen: React.FC = () => {
         amount: bidValue,
       };
 
-      const bidUrl = `http://10.37.206.200:8086/Bid/placeBid?bidCarId=${selectedCar.bidCarId}`;
+      const bidUrl = `https://car03.dostenterprises.com/Bid/placeBid?bidCarId=${selectedCar.bidCarId}`;
       const response = await fetch(bidUrl, {
         method: 'POST',
         headers: {
@@ -721,6 +873,23 @@ const HomeScreen: React.FC = () => {
       } catch (parseError) {}
 
       if (response.ok) {
+        // Optimistically update this device with the new bid amount
+        const bidKey = String(selectedCar.bidCarId);
+        setLivePrices(prev => ({
+          ...prev,
+          [bidKey]: {
+            ...(prev[bidKey] || {}),
+            price: bidValue,
+          },
+        }));
+        setFilteredLiveCars(prev =>
+          prev.map(c =>
+            c.id === selectedCar.bidCarId || c.bidCarId === selectedCar.bidCarId
+              ? {...c, currentBid: bidValue}
+              : c,
+          ),
+        );
+
         setModalVisible(false);
         Alert.alert(
           'Bid Placed Successfully!',
@@ -728,13 +897,13 @@ const HomeScreen: React.FC = () => {
           [
             {
               text: 'OK',
-              onPress: async () => {
-                await refreshAllCarPrices();
-                getLiveCars();
+                onPress: () => {
                 const car = filteredLiveCars.find(
-                  c => c.id === selectedCar.bidCarId,
+                  c =>
+                    c.id === selectedCar.bidCarId ||
+                    c.bidCarId === selectedCar.bidCarId,
                 );
-                if (car) showNotification(car, 'bid');
+                if (car) showNotification(car, 'bid', bidValue);
               },
             },
           ],
@@ -833,9 +1002,16 @@ const HomeScreen: React.FC = () => {
       car.imageUrl ||
       'https://photos.caryanamindia.com/1453c850-c6a4-4d46-ab36-6c4dbab27f4c-crysta%201%20-%20Copy.jpg';
     const carDetails = carDetailsData[carId] || carDetailsData[bidId];
-    const livePriceData = livePrices[carId];
+    const priceKey = bidId || carId;
+    const livePriceData = livePrices[priceKey];
     const currentBid =
-      livePriceData?.price ?? car.currentBid ?? carDetails?.price ?? 0;
+      (livePriceData && typeof livePriceData.price === 'number' && livePriceData.price > 0
+        ? livePriceData.price
+        : typeof car.currentBid === 'number' && car.currentBid > 0
+        ? car.currentBid
+        : typeof carDetails?.price === 'number' && carDetails.price > 0
+        ? carDetails.price
+        : 0);
     const timeLeft = countdownTimers[carId] || '00:30:00';
     const wishlisted = isWishlisted(carId);
 
@@ -957,12 +1133,17 @@ const HomeScreen: React.FC = () => {
       'https://photos.caryanamindia.com/1453c850-c6a4-4d46-ab36-6c4dbab27f4c-crysta%201%20-%20Copy.jpg';
 
     const carDetails = carDetailsData[carId] || carDetailsData[bidId];
-    const livePriceData = livePrices[carId];
+    const priceKey = bidId || carId;
+    const livePriceData = livePrices[priceKey];
     const currentBid =
-      livePriceData?.price ??
-      selectedCarForDetails.currentBid ??
-      carDetails?.price ??
-      5874000;
+      (livePriceData && typeof livePriceData.price === 'number' && livePriceData.price > 0
+        ? livePriceData.price
+        : typeof selectedCarForDetails.currentBid === 'number' &&
+          selectedCarForDetails.currentBid > 0
+        ? selectedCarForDetails.currentBid
+        : typeof carDetails?.price === 'number' && carDetails.price > 0
+        ? carDetails.price
+        : 5874000);
     const timeLeft = countdownTimers[carId] || '23:24:00';
 
     const brand = carDetails?.brand || selectedCarForDetails.make || '2021';
@@ -1390,28 +1571,27 @@ const HomeScreen: React.FC = () => {
                   </Text>
                 )}
               </View>
-              <TouchableOpacity onPress={onRefresh} activeOpacity={0.7}>
-                <View style={styles.refreshGradient}>
-                  <Ionicons name="refresh" size={18} color="#fff" />
-                </View>
-              </TouchableOpacity>
+              {/* Refresh button removed */}
             </View>
             {isLoading ? (
-  <View style={styles.loadingContainer}>
-    <ActivityIndicator size="large" color="#a9acd6" />
-    <Text style={styles.loadingText}>Loading cars...</Text>
-    {connectionError && (
-      <Text style={{
-        color: '#ff6b6b',
-        fontSize: 14,
-        textAlign: 'center',
-        marginTop: 10,
-        fontWeight: '500',
-      }}>
-        Connection Error: {connectionError}
-      </Text>
-    )}
-  </View>
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#a9acd6" />
+                <Text style={styles.loadingText}>
+                  {connectionError ? 'Connecting to server...' : 'Loading cars...'}
+                </Text>
+                {connectionError && (
+                  <Text
+                    style={{
+                      color: '#ff6b6b',
+                      fontSize: 14,
+                      textAlign: 'center',
+                      marginTop: 10,
+                      fontWeight: '500',
+                    }}>
+                    {connectionError}
+                  </Text>
+                )}
+              </View>
             ) : filteredLiveCars.length > 0 ? (
               filteredLiveCars.map(renderCarCard)
             ) : (
@@ -1421,15 +1601,10 @@ const HomeScreen: React.FC = () => {
                   size={60}
                   color="#D1D5DB"
                 />
-                <Text style={styles.emptyText}>No live cars available</Text>
-                {connectionError && (
-                  <Text style={styles.errorTextSmall}>{connectionError}</Text>
-                )}
-                <TouchableOpacity onPress={handleRetry} activeOpacity={0.8}>
-                  <View style={styles.retryButton}>
-                    <Text style={styles.retryText}>Retry Connection</Text>
-                  </View>
-                </TouchableOpacity>
+                <Text style={styles.emptyText}>
+                  {connectionError ? 'Connection error' : 'No live auctions available'}
+                </Text>
+                {/* Retry Connection button removed */}
               </View>
             )}
             <View style={{height: 100}} />
@@ -1494,33 +1669,6 @@ const HomeScreen: React.FC = () => {
 
       {/* CAR DETAILS MODAL */}
       {renderCarDetailsModal()}
-
-      {/* LOW BALANCE WARNING - COMMENTED OUT 
-      {showLowBalanceWarning && (
-        <View style={styles.warningFixedContainer}>
-          <View style={styles.warningIconText}>
-            <MaterialCommunityIcons
-              name="wallet-outline"
-              size={26}
-              color="#fff"
-              style={{marginRight: 10}}
-            />
-            <View style={{flex: 1}}>
-              <Text style={styles.warningTitle}>Low Account Balance</Text>
-              <Text style={styles.warningText}>
-                Account balance below ₹10,000. Deposit to continue bidding.
-              </Text>
-            </View>
-          </View>
-          <TouchableOpacity
-            onPress={() => setShowLowBalanceWarning(false)}
-            style={styles.closeWarningButton}
-            activeOpacity={0.7}>
-            <Ionicons name="close" size={22} color="#fff" />
-          </TouchableOpacity>
-        </View>
-      )}
-          */}
     </SafeAreaView>
   );
 };

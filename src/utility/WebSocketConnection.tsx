@@ -12,8 +12,8 @@ type SocketType = SocketIOClient.Socket;
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // -------- CONFIG --------
-const WS_BASE_URL = 'http://10.37.206.200:8091'; // FIXED: Added : after http
-const TOKEN_KEY = 'auth_token';
+const WS_BASE_URL = 'https://car04.dostenterprises.com';  
+const TOKEN_KEY = 'auth_token'; 
 // ------------------------
 
 type BidUserData = { userId: string; bidCarId: string; amount: number };
@@ -120,11 +120,81 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       city: car.city || 'Unknown',
       make: car.make || 'Car',
       model: car.model || 'Model',
-      currentBid: car.currentBid || car.highestBid || 0,
+      // Prefer explicit bid fields only; do NOT derive current bid from basePrice
+      currentBid:
+        car.currentBid ??
+        car.highestBid ??
+        0,
       startingBid: car.startingBid || 0,
       closingTime: car.closingTime,
       ...car,
     }));
+  };
+
+  // ========== BID UPDATE HELPERS ==========
+  const applyBidUpdatesToLiveCars = (incoming: any) => {
+    if (!incoming) {
+      return;
+    }
+
+    const updates = Array.isArray(incoming) ? incoming : [incoming];
+
+    setLiveCars(prev => {
+      if (!prev || prev.length === 0) {
+        return prev;
+      }
+
+      let changed = false;
+
+      const updated = prev.map(car => {
+        const baseId = String(car.id || car.carId || car.bidCarId || '');
+        if (!baseId) {
+          return car;
+        }
+
+        const match = updates.find((u: any) => {
+          const updateId = String(
+            u?.bidCarId ?? u?.carId ?? u?.id ?? u?.bid_car_id ?? '',
+          );
+          return updateId && updateId === baseId;
+        });
+
+        if (!match) {
+          return car;
+        }
+
+        const newAmount =
+          typeof match.amount === 'number'
+            ? match.amount
+            : typeof match.currentBid === 'number'
+            ? match.currentBid
+            : typeof match.highestBid === 'number'
+            ? match.highestBid
+            : typeof match.price === 'number'
+            ? match.price
+            : car.currentBid;
+
+        if (newAmount === undefined || newAmount === null) {
+          return car;
+        }
+
+        changed = true;
+        return {
+          ...car,
+          currentBid: newAmount,
+          highestBid:
+            typeof match.highestBid === 'number' ? match.highestBid : newAmount,
+        };
+      });
+
+      if (!changed) {
+        console.log('ℹ️ Bid update received but no matching live car was found');
+        return prev;
+      }
+
+      console.log('⚡ Updated liveCars with latest bid amounts via WebSocket');
+      return updated;
+    });
   };
 
   // ========== SETUP EVENT LISTENERS ==========
@@ -148,6 +218,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
         const dataArray = Array.isArray(data) ? data : [data];
         const transformed = transformCars(dataArray);
         console.log(`⚡ Successfully transformed ${transformed.length} live cars`);
+        console.log('🔧 Transformed live cars sample:', transformed[0]);
         setLiveCars(transformed);
       } catch (error) {
         console.error('❌ Error processing live cars:', error);
@@ -155,29 +226,34 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       }
     });
 
-    // Bids listener
+    // Bids listener - single or multiple bid updates
     socket.on('bids', (data: any) => {
       console.log('💰 Received bid update:', data);
+      applyBidUpdatesToLiveCars(data);
     });
 
-    // Top bid listener
+    // Top bid listener - highest bid for a single car
     socket.on('topBid', (data: any) => {
       console.log('🏆 Received top bid update:', data);
+      applyBidUpdatesToLiveCars(data);
     });
 
-    // Top bids listener
+    // Top bids listener - highest bids for multiple cars
     socket.on('topBids', (data: any) => {
       console.log('🏆 Received top bids update:', data);
+      applyBidUpdatesToLiveCars(data);
     });
 
-    // Top three bids listener
+    // Top three bids listener - we still only care about latest price per car
     socket.on('topThreeBids', (data: any) => {
       console.log('📊 Received top three bids:', data);
+      applyBidUpdatesToLiveCars(data);
     });
 
-    // Place bid response listener
+    // Place bid response listener - can also carry updated bid value
     socket.on('placeBidResponse', (data: any) => {
       console.log('✅ Received place bid response:', data);
+      applyBidUpdatesToLiveCars(data);
     });
 
     // Error listener
@@ -349,7 +425,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     
     const tokenToUse = authToken || tokenRef.current;
     
-    if (!tokenToUse) {
+    if (!tokenToUse) { 
       console.error('❌ No token available for WebSocket connection');
       setConnectionError('No authentication token available');
       setConnectionStatus('error');
@@ -500,4 +576,4 @@ export const useWebSocket = (): WebSocketContextType => {
 };
 
 // Export hook for easy usage
-export default useWebSocket;
+export default useWebSocket;  

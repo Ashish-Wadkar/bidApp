@@ -120,7 +120,7 @@ const MyCarsScreen = ({navigation}: any) => {
     const beadingCarId = car.beadingCarId || car.bidCarId || car.id;
     try {
       const response = await fetch(
-        `  http://10.37.206.200:8086/uploadFileBidCar/getByBidCarID?beadingCarId=${beadingCarId}`,
+        `  https://car03.dostenterprises.com/uploadFileBidCar/getByBidCarID?beadingCarId=${beadingCarId}`,
       );
       const text = await response.text();
       let imgArray: any[] = [];
@@ -163,7 +163,7 @@ const MyCarsScreen = ({navigation}: any) => {
     setLoading(true);
     try {
       const res = await fetch(
-        `  http://10.37.206.200:8086/BeadingCarController/getByDealerID/${dealerId}`,
+        `  https://car03.dostenterprises.com/BeadingCarController/getByDealerID/${dealerId}`,
       );
       const text = await res.text();
       let data;

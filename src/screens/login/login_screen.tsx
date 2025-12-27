@@ -12,6 +12,9 @@ import {
   StatusBar,
   ActivityIndicator,
   Image,  
+  KeyboardAvoidingView,
+  ScrollView,
+  Platform,
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {StackNavigationProp} from '@react-navigation/stack';
@@ -44,8 +47,8 @@ type LoginScreenNavigationProp = StackNavigationProp<
 >;
 
 const Login = () => {
-  const [username, setUsername] = useState('dealer0@gmail.com');
-  const [password, setPassword] = useState('Pass@123');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -114,9 +117,9 @@ const Login = () => {
     }
 
     try {
-      setLoading(true);
+      setLoading(true); 
       const response = await fetch(
-        'http://10.37.206.200:8086/jwt/login',
+        'https://car03.dostenterprises.com/jwt/login',
         {
           method: 'POST',
           headers: {
@@ -127,8 +130,11 @@ const Login = () => {
             username: username.trim(),
             password: password.trim(),
           }),
+         
         },
+        
       );
+
 
       const responseText = await response.text();
       console.log('=== LOGIN RESPONSE ===');
@@ -218,6 +224,15 @@ const Login = () => {
       colors={['#051A2F', '#051A2F', '#051A2F']}
       style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#051A2F" />
+      
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardAvoidingView}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}>
 
       {/* Top Curved Section with Centered Logo */}
       <View style={styles.topCurvedSection}>
@@ -248,15 +263,6 @@ const Login = () => {
           <View style={styles.formGroup}>
             <Text style={styles.label}>Password</Text>
             <View style={styles.passwordContainer}>
-              <TouchableOpacity
-                onPress={() => setShowPassword(!showPassword)}
-                style={styles.eyeIconFront}>
-                <Ionicons
-                  name={showPassword ? 'eye' : 'eye-off'}
-                  size={22}
-                  color="#666"
-                />
-              </TouchableOpacity>
               <TextInput
                 placeholder="Enter password"
                 value={password}
@@ -267,6 +273,15 @@ const Login = () => {
                 autoCapitalize="none"
                 autoCorrect={false}
               />
+                  <TouchableOpacity
+                    onPress={() => setShowPassword(!showPassword)}
+                    style={styles.eyeIcon}>
+                    <Ionicons
+                      name={showPassword ? 'eye' : 'eye-off'}
+                      size={22}
+                      color="#666"
+                    />
+                  </TouchableOpacity>
             </View>
           </View>
 
@@ -288,15 +303,24 @@ const Login = () => {
           </TouchableOpacity>
         </View>
       </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
   container: {flex: 1},
+  keyboardAvoidingView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 20,
+  },
   topCurvedSection: {
-    paddingTop: 150,
-    paddingBottom: 40,
+    paddingTop: 80,
+    paddingBottom: 30,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -305,21 +329,25 @@ const styles = StyleSheet.create({
     height: 100,
   },
   cardContainer: {
-    flex: 1,
     backgroundColor: '#fff',
     borderRadius: 40,
     marginHorizontal: 20,
-    marginBottom: 150,
+    marginBottom: 30,
     paddingTop: 40,
     paddingHorizontal: 30,
+    paddingBottom: 30,
     elevation: 15,
     shadowColor: '#000',
     shadowOffset: {width: 0, height: 4},
     shadowOpacity: 0.15,
     shadowRadius: 10,
   },
-  content: {flex: 1},
-  formGroup: {marginBottom: 20},
+  content: {
+    width: '100%',
+  },
+  formGroup: {
+    marginBottom: 20,
+  },
   label: {
     color: '#333',
     fontSize: 14,
@@ -334,12 +362,34 @@ const styles = StyleSheet.create({
     padding: 15,
     color: '#333',
     fontSize: 15,
+    width: '100%',
   },
-  passwordContainer: {flexDirection: 'row', alignItems: 'center'},
-  eyeIconFront: {position: 'absolute', right: 15, top: 15, zIndex: 1},
-  passwordInput: {paddingLeft: 10, flex: 1},
-  forgotContainer: {alignItems: 'flex-end', marginTop: -10, marginBottom: 15},
-  forgotText: {color: '#61AFFE', fontSize: 14, fontWeight: '500'},
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  passwordInput: {
+    flex: 1,
+    paddingRight: 45,
+  },
+  eyeIcon: {
+    position: 'absolute',
+    right: 15,
+    top: 15,
+    zIndex: 1,
+    padding: 5,
+  },
+  forgotContainer: {
+    alignItems: 'flex-end',
+    marginTop: -10,
+    marginBottom: 15,
+  },
+  forgotText: {
+    color: '#61AFFE',
+    fontSize: 14,
+    fontWeight: '500',
+  },
   loginButton: {
     backgroundColor: '#61AFFE',
     borderRadius: 12,
@@ -350,8 +400,11 @@ const styles = StyleSheet.create({
     shadowOffset: {width: 0, height: 2},
     shadowOpacity: 0.3,
     shadowRadius: 5,
+    marginTop: 10,
   },
-  loginButtonDisabled: {opacity: 0.6},
+  loginButtonDisabled: {
+    opacity: 0.6,
+  },
   loginButtonText: {
     color: '#fff',
     fontWeight: '700',
