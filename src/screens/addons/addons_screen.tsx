@@ -69,7 +69,7 @@ const AddOnsScreen: React.FC = () => {
       const token = await AsyncStorage.getItem('auth_token');
       if (!token) throw new Error('No auth token found');
 
-      const response = await fetch('  https://car03.dostenterprises.com/Bid/finalBids', {
+      const response = await fetch('https://car03.dostenterprises.com/Bid/finalBids', {
         method: 'GET',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       });

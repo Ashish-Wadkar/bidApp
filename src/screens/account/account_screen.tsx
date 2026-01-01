@@ -13,6 +13,9 @@ import {
   TouchableWithoutFeedback,
   ActivityIndicator,
   Linking,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -27,6 +30,20 @@ const AccountScreen = ({ navigation }: any) => {
   const [loading, setLoading] = useState(false);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState({
+    firstName: '',
+    lastName: '',
+    mobileNo: '',
+    shopName: '',
+    area: '',
+    city: '',
+    address: '',
+  });
+  const [updateMessage, setUpdateMessage] = useState<{
+    type: 'success' | 'error';
+    text: string;
+  } | null>(null);
  
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const modalAnim = useRef(new Animated.Value(0)).current;
@@ -68,7 +85,7 @@ const AccountScreen = ({ navigation }: any) => {
       }
  
       const dealerRes = await fetch(
-        `  https://car03.dostenterprises.com/dealer/${dealerId}`,
+        `https://car03.dostenterprises.com/dealer/${dealerId}`,
         {
           headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
         },
@@ -78,7 +95,7 @@ const AccountScreen = ({ navigation }: any) => {
       if (dealerRes.ok && dealerJson?.dealerDto) setDealerData(dealerJson.dealerDto);
  
       const photoRes = await fetch(
-        `  https://car03.dostenterprises.com/ProfilePhoto/getbyuserid?userId=${userId}`,
+        `https://car03.dostenterprises.com/ProfilePhoto/getbyuserid?userId=${userId}`,
         { headers: { Authorization: `Bearer ${token}` } },
       );
  
@@ -126,7 +143,7 @@ const AccountScreen = ({ navigation }: any) => {
  
       setLoading(true);
       const res = await fetch(
-        '  https://car03.dostenterprises.com/ProfilePhoto/add',
+        'https://car03.dostenterprises.com/ProfilePhoto/add',
         {
           method: 'POST',
           headers: {
@@ -162,7 +179,7 @@ const AccountScreen = ({ navigation }: any) => {
  
       setLoading(true);
       const res = await fetch(
-        `  https://car03.dostenterprises.com/ProfilePhoto/deletebyuserid?userId=${userId}`,
+        `https://car03.dostenterprises.com/ProfilePhoto/deletebyuserid?userId=${userId}`,
         {
           method: 'DELETE',
           headers: { Authorization: `Bearer ${token}` },
@@ -198,6 +215,19 @@ const AccountScreen = ({ navigation }: any) => {
   };
  
   const openModal = () => {
+    if (dealerData) {
+      setEditForm({
+        firstName: dealerData.firstName || '',
+        lastName: dealerData.lastName || '',
+        mobileNo: dealerData.mobileNo || '',
+        shopName: dealerData.shopName || '',
+        area: dealerData.area || '',
+        city: dealerData.city || '',
+        address: dealerData.address || '',
+      });
+    }
+    setUpdateMessage(null);
+    setIsEditing(false);
     setModalVisible(true);
     Animated.timing(modalAnim, { toValue: 1, duration: 250, useNativeDriver: true }).start();
   };
@@ -206,6 +236,76 @@ const AccountScreen = ({ navigation }: any) => {
     Animated.timing(modalAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start(() =>
       setModalVisible(false),
     );
+  };
+
+  const handleSaveProfile = async () => {
+    try {
+      const token = await AsyncStorage.getItem(TOKEN_KEY);
+      if (!token) {
+        Alert.alert('Error', 'Missing authentication token.');
+        return;
+      }
+
+      const decoded = parseJwt(token);
+      const userId = decoded?.userId;
+      if (!userId) {
+        Alert.alert('Error', 'User ID not found.');
+        return;
+      }
+
+      setLoading(true);
+      setUpdateMessage(null);
+
+      const res = await fetch(
+        `https://car03.dostenterprises.com/dealer/updateDealer/${userId}`,
+        {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({
+            firstName: editForm.firstName.trim(),
+            lastName: editForm.lastName.trim(),
+            mobileNo: editForm.mobileNo.trim(),
+            shopName: editForm.shopName.trim(),
+            area: editForm.area.trim(),
+            city: editForm.city.trim(),
+            address: editForm.address.trim(),
+          }),
+        },
+      );
+
+      const data = await res.json().catch(() => null);
+
+      if (res.ok) {
+        setUpdateMessage({
+          type: 'success',
+          text:
+            data?.message ||
+            'Your profile has been updated successfully. Thanks for keeping your details up to date.',
+        });
+        setIsEditing(false);
+        // Refresh latest dealer data
+        fetchDealerData();
+      } else {
+        setUpdateMessage({
+          type: 'error',
+          text:
+            data?.message ||
+            'We could not update your profile right now. Please review your details and try again.',
+        });
+      }
+    } catch (error) {
+      console.error('Update dealer error:', error);
+      setUpdateMessage({
+        type: 'error',
+        text: 'Something went wrong while updating your profile. Please check your connection and try again.',
+      });
+    } finally {
+      setLoading(false);
+    }
   };
  
   const confirmLogout = () => {
@@ -268,7 +368,7 @@ const AccountScreen = ({ navigation }: any) => {
  
       {/* MAIN CONTENT */}
       <ScrollView style={styles.scrollArea} contentContainerStyle={{ paddingBottom: 40 }}>
-        <View style={styles.topBanner}>
+        {/* <View style={styles.topBanner}>
           <Text style={styles.topBannerText}>Get unlimited app access</Text>
           <Text style={styles.topBannerSub}>
             Buy <Text style={styles.highlight}>Basic</Text> at just ₹500 / month
@@ -276,7 +376,7 @@ const AccountScreen = ({ navigation }: any) => {
           <TouchableOpacity style={{ marginTop: 8 }}>
             <Text style={styles.knowMore}>Know more</Text>
           </TouchableOpacity>
-        </View>
+        </View> */}
  
         <TouchableOpacity activeOpacity={0.9} style={styles.profileCard} onPress={openModal}>
           {photoUrl ? (
@@ -326,12 +426,12 @@ const AccountScreen = ({ navigation }: any) => {
  
         <View style={styles.storyBanner}>
           <Text style={styles.storyText}>Your stories now have a new destination</Text>
-          <Text style={styles.bigCardSub}>Follow Caryanam Partners</Text>
+          <Text style={styles.bigCardSub}>Follow Caryanamindia Partners</Text>
  
           <View style={styles.socialRow}>
             <TouchableOpacity
               style={styles.socialIcon}
-              onPress={() => Linking.openURL('mailto:info@caryanam.in')}>
+              onPress={() => Linking.openURL('mailto:info@caryanamindia.in')}>
               <Ionicons name="mail-outline" size={18} color="#fff" />
             </TouchableOpacity>
             <TouchableOpacity
@@ -375,69 +475,166 @@ const AccountScreen = ({ navigation }: any) => {
       </ScrollView>
  
       {/* MODAL */}
-      <Modal transparent visible={modalVisible} onRequestClose={closeModal}>
-        <TouchableWithoutFeedback onPress={closeModal}>
-          <View style={styles.modalOverlay} />
-        </TouchableWithoutFeedback>
- 
-        <Animated.View
-          style={[
-            styles.modalContainer,
-            {
-              opacity: modalAnim,
-              transform: [
-                {
-                  scale: modalAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0.95, 1],
-                  }),
-                },
-              ],
-            },
-          ]}>
-          {loading ? (
-            <ActivityIndicator size="large" color="#262A4F" />
-          ) : dealerData ? (
-            <>
-              <View style={styles.profileImageContainer}>
-                {photoUrl ? (
-                  <Image
-                    source={{ uri: photoUrl }}
-                    style={styles.profileImage}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <Ionicons name="person-circle-outline" size={120} color="#ccc" />
-                )}
-                <View style={styles.imageButtonRow}>
-                  <TouchableOpacity style={styles.addImageButton} onPress={handleAddImage}>
-                    <Text style={styles.addImageText}>ADD IMAGE</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.deleteImageButton} onPress={handleDeleteImage}>
-                    <Text style={styles.deleteImageText}>DELETE IMAGE</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
- 
-              <View style={styles.detailBox}>
-                <DetailRow label="First Name" value={dealerData.firstName} />
-                <DetailRow label="Last Name" value={dealerData.lastName} />
-                <DetailRow label="Mobile Number" value={dealerData.mobileNo} />
-                <DetailRow label="Shop Name" value={dealerData.shopName} />
-                <DetailRow label="Area" value={dealerData.area} />
-                <DetailRow label="Email" value={dealerData.email} />
-                <DetailRow label="City" value={dealerData.city} />
-                <DetailRow label="Address" value={dealerData.address} />
-              </View>
- 
-              <TouchableOpacity style={styles.editButton} onPress={closeModal}>
-                <Text style={styles.editButtonText}>EDIT PROFILE</Text>
+      <Modal visible={modalVisible} onRequestClose={closeModal} animationType="slide">
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}>
+          <Animated.View
+            style={[
+              {
+                flex: 1,
+                backgroundColor: '#fff',
+                opacity: modalAnim,
+                transform: [
+                  {
+                    scale: modalAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.95, 1],
+                    }),
+                  },
+                ],
+              },
+            ]}>
+            {/* Header with close button */}
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                paddingHorizontal: 20,
+                paddingTop: Platform.OS === 'ios' ? 50 : 20,
+                paddingBottom: 10,
+                borderBottomWidth: 1,
+                borderBottomColor: '#E5E7EB',
+              }}>
+              <Text style={{ fontSize: 20, fontWeight: '600', color: '#262A4F' }}>Profile Details</Text>
+              <TouchableOpacity onPress={closeModal} style={{ padding: 8 }}>
+                <Ionicons name="close" size={28} color="#262A4F" />
               </TouchableOpacity>
-            </>
-          ) : (
-            <Text>No data available.</Text>
-          )}
-        </Animated.View>
+            </View>
+
+            {loading ? (
+              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                <ActivityIndicator size="large" color="#262A4F" />
+              </View>
+            ) : dealerData ? (
+              <ScrollView
+                style={{ flex: 1 }}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
+                <View style={styles.profileImageContainer}>
+                    {photoUrl ? (
+                      <Image
+                        source={{ uri: photoUrl }}
+                        style={styles.profileImage}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <Ionicons name="person-circle-outline" size={120} color="#ccc" />
+                    )}
+                    <View style={styles.imageButtonRow}>
+                      <TouchableOpacity style={styles.addImageButton} onPress={handleAddImage}>
+                        <Text style={styles.addImageText}>ADD IMAGE</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.deleteImageButton} onPress={handleDeleteImage}>
+                        <Text style={styles.deleteImageText}>DELETE IMAGE</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {updateMessage && (
+                    <View
+                      style={{
+                        backgroundColor: updateMessage.type === 'success' ? '#E3F9E5' : '#FEE2E2',
+                        borderRadius: 12,
+                        paddingVertical: 10,
+                        paddingHorizontal: 14,
+                        marginBottom: 12,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                      }}>
+                      <Ionicons
+                        name={
+                          updateMessage.type === 'success' ? 'checkmark-circle' : 'alert-circle'
+                        }
+                        size={20}
+                        color={updateMessage.type === 'success' ? '#15803D' : '#B91C1C'}
+                        style={{ marginRight: 8 }}
+                      />
+                      <Text
+                        style={{
+                          color: updateMessage.type === 'success' ? '#166534' : '#B91C1C',
+                          fontWeight: '600',
+                          flex: 1,
+                        }}>
+                        {updateMessage.text}
+                      </Text>
+                    </View>
+                  )}
+
+                  <View style={styles.detailBox}>
+                    <EditableDetailRow
+                      label="First Name"
+                      value={editForm.firstName}
+                      editable={isEditing}
+                      onChangeText={text => setEditForm(prev => ({ ...prev, firstName: text }))}
+                    />
+                    <EditableDetailRow
+                      label="Last Name"
+                      value={editForm.lastName}
+                      editable={isEditing}
+                      onChangeText={text => setEditForm(prev => ({ ...prev, lastName: text }))}
+                    />
+                    <EditableDetailRow
+                      label="Mobile Number"
+                      value={editForm.mobileNo}
+                      editable={isEditing}
+                      onChangeText={text => setEditForm(prev => ({ ...prev, mobileNo: text }))}
+                    />
+                    <EditableDetailRow
+                      label="Shop Name"
+                      value={editForm.shopName}
+                      editable={isEditing}
+                      onChangeText={text => setEditForm(prev => ({ ...prev, shopName: text }))}
+                    />
+                    <EditableDetailRow
+                      label="Area"
+                      value={editForm.area}
+                      editable={isEditing}
+                      onChangeText={text => setEditForm(prev => ({ ...prev, area: text }))}
+                    />
+                    {/* Email is intentionally non-editable as per requirements */}
+                    <DetailRow label="Email" value={dealerData.email} />
+                    <EditableDetailRow
+                      label="City"
+                      value={editForm.city}
+                      editable={isEditing}
+                      onChangeText={text => setEditForm(prev => ({ ...prev, city: text }))}
+                    />
+                    <EditableDetailRow
+                      label="Address"
+                      value={editForm.address}
+                      editable={isEditing}
+                      onChangeText={text => setEditForm(prev => ({ ...prev, address: text }))}
+                    />
+                  </View>
+
+                  <TouchableOpacity
+                    style={[styles.editButton, { marginTop: 16 }]}
+                    onPress={isEditing ? handleSaveProfile : () => setIsEditing(true)}>
+                    <Text style={styles.editButtonText}>
+                      {isEditing ? 'SAVE CHANGES' : 'EDIT PROFILE'}
+                    </Text>
+                  </TouchableOpacity>
+                </ScrollView>
+              ) : (
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                  <Text>No data available.</Text>
+                </View>
+              )}
+          </Animated.View>
+        </KeyboardAvoidingView>
       </Modal>
  
       {loading && (
@@ -455,6 +652,42 @@ const DetailRow = ({ label, value }: { label: string; value?: string }) => (
     <Text style={styles.detailLabel}>{label}</Text>
     <View style={styles.detailValueContainer}>
       <Text style={styles.detailValue}>{value || '—'}</Text>
+    </View>
+  </View>
+);
+
+const EditableDetailRow = ({
+  label,
+  value,
+  editable,
+  onChangeText,
+}: {
+  label: string;
+  value?: string;
+  editable: boolean;
+  onChangeText: (text: string) => void;
+}) => (
+  <View style={styles.detailRow}>
+    <Text style={styles.detailLabel}>{label}</Text>
+    <View style={styles.detailValueContainer}>
+      {editable ? (
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={`Enter ${label.toLowerCase()}`}
+          style={[
+            styles.detailValue,
+            {
+              borderBottomWidth: 1,
+              borderBottomColor: '#E5E7EB',
+              paddingVertical: 4,
+            },
+          ]}
+          placeholderTextColor="#9CA3AF"
+        />
+      ) : (
+        <Text style={styles.detailValue}>{value || '—'}</Text>
+      )}
     </View>
   </View>
 );

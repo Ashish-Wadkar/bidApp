@@ -1,13 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Image, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, Image, ScrollView, StyleSheet, ActivityIndicator, Modal, TouchableOpacity, Dimensions } from 'react-native';
+import Ionicons from 'react-native-vector-icons/Ionicons';
 
 interface ExteriorSectionProps {
   beadingCarId: string;
 }
 
+const { width, height } = Dimensions.get('window');
+
 const ExteriorSection: React.FC<ExteriorSectionProps> = ({ beadingCarId }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<{ uri: string; sectionName: string; partName: string } | null>(null);
   
   const [formData, setFormData] = useState({
     BonnetHood: "",
@@ -107,7 +112,7 @@ const ExteriorSection: React.FC<ExteriorSectionProps> = ({ beadingCarId }) => {
     try {
       const docType = 'Exterior';
       const response = await fetch(
-        `  https://car03.dostenterprises.com/uploadFileBidCar/getBidCarIdType?beadingCarId=${beadingCarId}&docType=${docType}`
+        `https://car03.dostenterprises.com/uploadFileBidCar/getBidCarIdType?beadingCarId=${beadingCarId}&docType=${docType}`
       );
       const text = await response.text();
       const data = JSON.parse(text);
@@ -308,14 +313,25 @@ const ExteriorSection: React.FC<ExteriorSectionProps> = ({ beadingCarId }) => {
     }
   }, [beadingCarId]);
 
+  const openImageModal = (imageUrl: string, partName: string) => {
+    setSelectedImage({
+      uri: imageUrl,
+      sectionName: 'Exterior',
+      partName: partName,
+    });
+    setModalVisible(true);
+  };
+
   const renderItem = (label: string, value: string, imageUrl: string | null) => (
     <View style={styles.itemContainer}>
       <Text style={styles.itemText}>{label}: {value || '-'}</Text>
       {imageUrl && (
-        <Image
-          source={{ uri: imageUrl }}
-          style={styles.image}
-        />
+        <TouchableOpacity onPress={() => openImageModal(imageUrl, label)} activeOpacity={0.8}>
+          <Image
+            source={{ uri: imageUrl }}
+            style={styles.image}
+          />
+        </TouchableOpacity>
       )}
     </View>
   );
@@ -415,6 +431,35 @@ const ExteriorSection: React.FC<ExteriorSectionProps> = ({ beadingCarId }) => {
           </View>
         </View>
       </View>
+
+      {/* Full Size Image Modal */}
+      <Modal
+        visible={modalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setModalVisible(false)}>
+        <View style={styles.modalContainer}>
+          <TouchableOpacity
+            style={styles.modalCloseButton}
+            onPress={() => setModalVisible(false)}>
+            <Ionicons name="close" size={28} color="#fff" />
+          </TouchableOpacity>
+          
+          {selectedImage && (
+            <>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalSectionName}>{selectedImage.sectionName}</Text>
+                <Text style={styles.modalPartName}>{selectedImage.partName}</Text>
+              </View>
+              <Image
+                source={{ uri: selectedImage.uri }}
+                style={styles.modalImage}
+                resizeMode="contain"
+              />
+            </>
+          )}
+        </View>
+      </Modal>
     </ScrollView>
   );
 };
@@ -491,6 +536,46 @@ const styles = StyleSheet.create({
     marginTop: 8,
     resizeMode: 'cover',
     borderRadius: 4,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCloseButton: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 20,
+    padding: 8,
+  },
+  modalHeader: {
+    position: 'absolute',
+    top: 50,
+    left: 20,
+    zIndex: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  modalSectionName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fff',
+    marginBottom: 4,
+  },
+  modalPartName: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#fff',
+  },
+  modalImage: {
+    width: width,
+    height: height,
   },
 });
 

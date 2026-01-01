@@ -1,4 +1,3 @@
- 
 import React, {useState, useEffect, useRef, useCallback} from 'react';
 import {
   View,
@@ -49,6 +48,7 @@ interface Car {
   beadingCarId?: string;
   bidCarId?: string;
   userId?: number | string;
+  closingTime?: number[]; // [year, month, day, hour, minute]
 }
 
 interface LivePriceData {
@@ -119,6 +119,9 @@ const HomeScreen: React.FC = () => {
   );
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showLowBalanceWarning, setShowLowBalanceWarning] = useState(true);
+  const [successModalVisible, setSuccessModalVisible] = useState(false);
+  const [successBidAmount, setSuccessBidAmount] = useState<number | null>(null);
+  const [successCar, setSuccessCar] = useState<Car | null>(null);
 
   const [bidModalPriceCache, setBidModalPriceCache] = useState<{
     [bidCarId: string]: number;
@@ -229,25 +232,25 @@ const HomeScreen: React.FC = () => {
     },
     [livePrices, carDetailsData, notificationAnim],
   );
-
-  const handleNotificationClick = () => {
-    // Test connection when notification icon is clicked 
-    testConnection();
-    if (filteredLiveCars.length === 0) {
-      Alert.alert('No Cars', 'No live cars to show demo notifications.');
-      return;
-    }
-    const randomCar =
-      filteredLiveCars[Math.floor(Math.random() * filteredLiveCars.length)];
-    const types: Array<'bid' | 'outbid' | 'won' | 'time'> = [
-      'bid',
-      'outbid',
-      'time',
-      'won',
-    ];
-    const randomType = types[Math.floor(Math.random() * types.length)];
-    showNotification(randomCar, randomType);
-  };
+// removed the handel notificationAnim here 
+  // const handleNotificationClick = () => {
+  //   // Test connection when notification icon is clicked 
+  //   testConnection();
+  //   if (filteredLiveCars.length === 0) {
+  //     Alert.alert('No Cars', 'No live cars to show demo notifications.');
+  //     return;
+  //   }
+  //   const randomCar =
+  //     filteredLiveCars[Math.floor(Math.random() * filteredLiveCars.length)];
+  //   const types: Array<'bid' | 'outbid' | 'won' | 'time'> = [
+  //     'bid',
+  //     'outbid',
+  //     'time',
+  //     'won',
+  //   ];
+  //   const randomType = types[Math.floor(Math.random() * types.length)];
+  //   showNotification(randomCar, randomType);
+  // };
 
   // === HELPER FUNCTIONS ===
   const getCurrentDateTimeForAPI = useCallback((): string => {
@@ -275,16 +278,29 @@ const HomeScreen: React.FC = () => {
     }
   }, []);
 
+  const parseClosingTime = useCallback((closingTime: number[] | undefined): number | null => {
+    if (!closingTime || !Array.isArray(closingTime) || closingTime.length !== 5) {
+      return null;
+    }
+    try {
+      // closingTime format: [year, month, day, hour, minute]
+      // Note: JavaScript Date months are 0-indexed, so subtract 1 from month
+      const [year, month, day, hour, minute] = closingTime;
+      const date = new Date(year, month - 1, day, hour, minute, 0, 0);
+      const timestamp = date.getTime();
+      if (isNaN(timestamp)) return null;
+      return timestamp;
+    } catch (error) {
+      return null;
+    }
+  }, []);
+
   const formatCountdown = useCallback((milliseconds: number): string => {
-    if (milliseconds <= 0) return '00:00:00';
+    if (milliseconds <= 0) return '00:00';
     const totalSeconds = Math.floor(milliseconds / 1000);
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
-    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(
-      2,
-      '0',
-    )}:${String(seconds).padStart(2, '0')}`;
+    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   }, []);
 
   // === IMMEDIATE CAR DISPLAY (FALLBACK) + LIVE PRICE SYNC ===
@@ -362,56 +378,81 @@ const HomeScreen: React.FC = () => {
     const newAuctionTimes: {[key: string]: {start: number; end: number}} = {
       ...carAuctionTimes,
     };
-    let hasNewCars = false;
+    let hasUpdates = false;
+    
     liveCars.forEach(car => {
-      if (car.id && !carAuctionTimes[car.id]) {
-        let startTime =
-          parseDateTime(car.auctionStartTime) ||
-          parseDateTime(car.startTime) ||
-          parseDateTime(car.createdAt) ||
-          now;
-        let endTime =
+      if (!car.id) return;
+      
+      let startTime =
+        parseDateTime(car.auctionStartTime) ||
+        parseDateTime(car.startTime) ||
+        parseDateTime(car.createdAt) ||
+        now;
+      
+      // Use closingTime if available (priority), otherwise fallback to other methods
+      let endTime = parseClosingTime(car.closingTime);
+      if (!endTime) {
+        endTime =
           parseDateTime(car.auctionEndTime) ||
           parseDateTime(car.endTime) ||
           startTime + AUCTION_DURATION_MS;
+      }
 
-        // Ensure endTime is always in the future
-        if (endTime <= now) {
-          endTime = now + AUCTION_DURATION_MS; // Set to 30 minutes from now
-          startTime = now;
-        }
+      // Ensure endTime is always in the future
+      if (endTime <= now) {
+        endTime = now + AUCTION_DURATION_MS; // Set to 30 minutes from now
+        startTime = now;
+      }
 
+      // Update if it's a new car or if closingTime has changed
+      const existingTime = carAuctionTimes[car.id];
+      if (!existingTime || existingTime.end !== endTime) {
         newAuctionTimes[car.id] = {start: startTime, end: endTime};
-        hasNewCars = true;
+        hasUpdates = true;
       }
     });
-    if (hasNewCars) {
+    
+    if (hasUpdates) {
       setCarAuctionTimes(newAuctionTimes);
     }
-  }, [liveCars, carAuctionTimes, parseDateTime]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveCars]); // carAuctionTimes removed to prevent infinite loop - we only read it, not trigger on it
 
   useEffect(() => {
-    if (Object.keys(carAuctionTimes).length === 0) {
-      return;
-    }
     if (countdownInterval.current) clearInterval(countdownInterval.current);
     countdownInterval.current = setInterval(() => {
       const now = Date.now();
       const newTimers: {[key: string]: string} = {};
       const activeCars: Car[] = [];
       const expiredCarIds: string[] = [];
+      
       liveCars.forEach(car => {
         if (!car.id) {
           return;
         }
-        const auctionTime = carAuctionTimes[car.id];
-        if (!auctionTime) {
-          // Keep cars visible even if they don't have auction times set yet
-          activeCars.push(car);
-          newTimers[car.id] = '00:30:00'; // Default timer
+        
+        // Priority: Use closingTime directly from car, then fallback to carAuctionTimes
+        let endTime: number | null = null;
+        
+        // First, try to get closingTime from the car object
+        const closingTimeStamp = parseClosingTime(car.closingTime);
+        if (closingTimeStamp && closingTimeStamp > now) {
+          endTime = closingTimeStamp;
+        } else {
+          // Fallback to carAuctionTimes
+          const auctionTime = carAuctionTimes[car.id];
+          if (auctionTime) {
+            endTime = auctionTime.end;
+          }
+        }
+        
+        if (!endTime || endTime <= now) {
+          // Car has expired or no valid end time
+          expiredCarIds.push(car.id);
           return;
         }
-        const remainingMs = auctionTime.end - now;
+        
+        const remainingMs = endTime - now;
         if (remainingMs > 0) {
           newTimers[car.id] = formatCountdown(remainingMs);
           activeCars.push(car);
@@ -419,6 +460,7 @@ const HomeScreen: React.FC = () => {
           expiredCarIds.push(car.id);
         }
       });
+      
       setCountdownTimers(newTimers);
       setFilteredLiveCars(activeCars);
       if (expiredCarIds.length > 0) {
@@ -432,7 +474,7 @@ const HomeScreen: React.FC = () => {
     return () => {
       if (countdownInterval.current) clearInterval(countdownInterval.current);
     };
-  }, [liveCars, carAuctionTimes, formatCountdown]);
+  }, [liveCars, carAuctionTimes, formatCountdown, parseClosingTime]);
 
   // === AUTH & WEBSOCKET - FIXED VERSION ===
   useEffect(() => {
@@ -511,7 +553,10 @@ const HomeScreen: React.FC = () => {
     } else {
       initialLiveCarsRequestedRef.current = false;
     }
-  }, [isConnected, getLiveCars]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isConnected]); // getLiveCars is stable from useWebSocket hook, ref ensures single execution
+// }, [isConnected, getLiveCars]);
+
 
   const onRefresh = async () => {
     console.log('🔄 Manual refresh triggered');
@@ -820,23 +865,14 @@ const HomeScreen: React.FC = () => {
           );
 
           setModalVisible(false);
-          Alert.alert(
-            'Bid Placed Successfully!',
-            `Your bid of ₹${bidValue.toLocaleString()} has been placed.`,
-            [
-              {
-                text: 'OK',
-                onPress: () => {
-                  const car = filteredLiveCars.find(
-                    c =>
-                      c.id === selectedCar.bidCarId ||
-                      c.bidCarId === selectedCar.bidCarId,
-                  );
-                  if (car) showNotification(car, 'bid', bidValue);
-                },
-              },
-            ],
+          const car = filteredLiveCars.find(
+            c =>
+              c.id === selectedCar.bidCarId ||
+              c.bidCarId === selectedCar.bidCarId,
           );
+          setSuccessCar(car || null);
+          setSuccessBidAmount(bidValue);
+          setSuccessModalVisible(true);
 
           // WebSocket path succeeded, no need for HTTP fallback
           return;
@@ -891,23 +927,14 @@ const HomeScreen: React.FC = () => {
         );
 
         setModalVisible(false);
-        Alert.alert(
-          'Bid Placed Successfully!',
-          `Your bid of ₹${bidValue.toLocaleString()} has been placed.`,
-          [
-            {
-              text: 'OK',
-                onPress: () => {
-                const car = filteredLiveCars.find(
-                  c =>
-                    c.id === selectedCar.bidCarId ||
-                    c.bidCarId === selectedCar.bidCarId,
-                );
-                if (car) showNotification(car, 'bid', bidValue);
-              },
-            },
-          ],
+        const car = filteredLiveCars.find(
+          c =>
+            c.id === selectedCar.bidCarId ||
+            c.bidCarId === selectedCar.bidCarId,
         );
+        setSuccessCar(car || null);
+        setSuccessBidAmount(bidValue);
+        setSuccessModalVisible(true);
       } else {
         // Parse error message from server response
         let errorMessage = 'Server Error';
@@ -1012,7 +1039,7 @@ const HomeScreen: React.FC = () => {
         : typeof carDetails?.price === 'number' && carDetails.price > 0
         ? carDetails.price
         : 0);
-    const timeLeft = countdownTimers[carId] || '00:30:00';
+    const timeLeft = countdownTimers[carId] || '30:00';
     const wishlisted = isWishlisted(carId);
 
     return (
@@ -1064,14 +1091,14 @@ const HomeScreen: React.FC = () => {
           <View style={styles.bidSection}>
             <View>
               <Text style={styles.highestBid}>
-                {livePriceData ? 'Live Bid [Red Dot]' : 'Highest Bid'}
+                {livePriceData ? 'Live Bid 🔴' : 'Highest Bid'}
               </Text>
               <Text style={styles.bidAmount}>
                 ₹{currentBid.toLocaleString()}
               </Text>
             </View>
             <View style={styles.timerContainer}>
-              <Text style={styles.timeRemaining}>[Clock] Time Left</Text>
+              <Text style={styles.timeRemaining}>⏱️Time Left</Text>
               <View style={styles.timerBox}>
                 <Text style={styles.timerText}>{timeLeft}</Text>
               </View>
@@ -1144,7 +1171,7 @@ const HomeScreen: React.FC = () => {
         : typeof carDetails?.price === 'number' && carDetails.price > 0
         ? carDetails.price
         : 5874000);
-    const timeLeft = countdownTimers[carId] || '23:24:00';
+    const timeLeft = countdownTimers[carId] || '00:00';
 
     const brand = carDetails?.brand || selectedCarForDetails.make || '2021';
     const model =
@@ -1452,7 +1479,9 @@ const HomeScreen: React.FC = () => {
       <LinearGradient
         colors={['#262a4f', '#353a65', '#262a4f']}
         style={styles.gradientBackground}>
-        {notifications.length > 0 && (
+
+          {/* remove the notification multple color theram  */}
+        {/* {notifications.length > 0 && (
           <TouchableOpacity
             activeOpacity={0.9}
             onPress={handleNotificationClick}
@@ -1494,7 +1523,7 @@ const HomeScreen: React.FC = () => {
               style={{marginLeft: 8}}
             />
           </TouchableOpacity>
-        )}
+        )} */}
         <View style={styles.header}>
           <View style={styles.headerTop}>
             <View style={styles.profileSection}>
@@ -1505,7 +1534,8 @@ const HomeScreen: React.FC = () => {
                 resizeMode="contain"
               />
             </View>
-            <TouchableOpacity
+            {/* remove the notivfication icone  */}
+            {/* <TouchableOpacity
               style={styles.notificationIcon}
               onPress={handleNotificationClick}>
               <Ionicons
@@ -1514,7 +1544,7 @@ const HomeScreen: React.FC = () => {
                 color="#a9acd6"
               />
               <View style={styles.notificationBadge} />
-            </TouchableOpacity>
+            </TouchableOpacity> */}
           </View>
           <View style={styles.searchContainer}>
             <View style={styles.searchBar}>
@@ -1542,7 +1572,7 @@ const HomeScreen: React.FC = () => {
               {renderTab('LIVE', filteredLiveCars.length)}
               {renderTab('OCB', 0)}
             </View>
-            <View style={styles.banner}>
+            {/* <View style={styles.banner}>
               <View style={{flex: 1}}>
                 <View style={styles.newLaunchBadge}>
                   <Text style={styles.bannerTitle}>New launch</Text>
@@ -1561,7 +1591,7 @@ const HomeScreen: React.FC = () => {
                 source={require('../../assets/images/car3.png')}
                 style={styles.bannerImage}
               />
-            </View>
+            </View> */}
             <View style={styles.liveCarsHeaderContainer}>
               <View>
                 <Text style={styles.liveCarsHeader}>Live Cars</Text>
@@ -1590,7 +1620,7 @@ const HomeScreen: React.FC = () => {
                     }}>
                     {connectionError}
                   </Text>
-                )}
+                )} 
               </View>
             ) : filteredLiveCars.length > 0 ? (
               filteredLiveCars.map(renderCarCard)
@@ -1669,6 +1699,53 @@ const HomeScreen: React.FC = () => {
 
       {/* CAR DETAILS MODAL */}
       {renderCarDetailsModal()}
+
+      {/* SUCCESS MODAL */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={successModalVisible}
+        onRequestClose={() => setSuccessModalVisible(false)}>
+        <View style={styles.successModalOverlay}>
+          <View style={styles.successModalContent}>
+            <View style={styles.successIconContainer}>
+              <MaterialCommunityIcons
+                name="check-circle"
+                size={60}
+                color="#fff"
+              />
+            </View>
+            <View style={styles.successContent}>
+              <Text style={styles.successTitle}>Bid Placed Successfully!</Text>
+              <Text style={styles.successMessage}>
+                Your bid has been placed and is now active in the auction.
+              </Text>
+              {successBidAmount !== null && (
+                <View style={styles.successAmountContainer}>
+                  <Text style={styles.successAmountLabel}>Your Bid Amount</Text>
+                  <Text style={styles.successAmount}>
+                    ₹{successBidAmount.toLocaleString()}
+                  </Text>
+                </View>
+              )}
+              <TouchableOpacity
+                style={styles.successButton}
+                onPress={() => {
+                  setSuccessModalVisible(false);
+                  // Remove the call the notification here
+                  // if (successCar && successBidAmount !== null) {
+                  //   showNotification(successCar, 'bid', successBidAmount);
+                  // }
+                  setSuccessCar(null);
+                  setSuccessBidAmount(null);
+                }}
+                activeOpacity={0.8}>
+                <Text style={styles.successButtonText}>Great!</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
