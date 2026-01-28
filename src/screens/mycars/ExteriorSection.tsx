@@ -112,7 +112,7 @@ const ExteriorSection: React.FC<ExteriorSectionProps> = ({ beadingCarId }) => {
     try {
       const docType = 'Exterior';
       const response = await fetch(
-        `https://car03.dostenterprises.com/uploadFileBidCar/getBidCarIdType?beadingCarId=${beadingCarId}&docType=${docType}`
+        `http://10.98.89.200:8086/uploadFileBidCar/getBidCarIdType?beadingCarId=${beadingCarId}&docType=${docType}`
       );
       const text = await response.text();
       const data = JSON.parse(text);
@@ -375,7 +375,7 @@ const ExteriorSection: React.FC<ExteriorSectionProps> = ({ beadingCarId }) => {
           </View>
         </View>
 
-        <Text style={styles.sectionTitle}>Tyre</Text>
+        {/* <Text style={styles.sectionTitle}>Tyre</Text>
         <View style={styles.card}>
           <View style={styles.gridContainer}>
             {renderItem("LHS Front Tyre", formData.LHSFrontTyre, uploadedImages.LHSFrontTyres)}
@@ -384,7 +384,7 @@ const ExteriorSection: React.FC<ExteriorSectionProps> = ({ beadingCarId }) => {
             {renderItem("RHS Rear Tyre", formData.RHSRearTyre, uploadedImages.RHSRearTyres)}
             {renderItem("Spare Tyre", formData.SpareTyre, uploadedImages.SpareTyres)}
           </View>
-        </View>
+        </View> */}
 
         <Text style={styles.sectionTitle}>Windshield and Lights</Text>
         <View style={styles.card}>
@@ -492,7 +492,7 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: 'bold',
     color: '#000',
-    marginBottom: 24,
+    marginBottom: 10,
   },
   sectionTitle: {
     fontSize: 20,
@@ -500,10 +500,10 @@ const styles = StyleSheet.create({
     color: '#000',
     backgroundColor: '#c7d2fe',
     borderRadius: 6,
-    paddingVertical: 8,
+    paddingVertical: 1,
     paddingHorizontal: 16,
-    marginTop: 16,
-    marginBottom: 20,
+    marginTop: 1,
+    marginBottom: 10,
   },
   card: {
     backgroundColor: '#fff',

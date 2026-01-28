@@ -119,7 +119,7 @@ const Login = () => {
     try {
       setLoading(true); 
       const response = await fetch(
-        'https://car03.dostenterprises.com/jwt/login',
+        'http://10.98.89.200:8086/jwt/login',
         {
           method: 'POST',
           headers: {
@@ -191,11 +191,13 @@ const Login = () => {
         }
 
         setTimeout(() => {
-          navigation.navigate('Home', {
-            token: token,
-            userId: userId,
-            userInfo: decodedToken,
-          });
+          if (token) {
+            navigation.navigate('Home', {
+              token: token,
+              userId: userId,
+              userInfo: decodedToken,
+            });
+          }
         }, 1000);
       } else {
         let errorMessage = 'Invalid credentials';

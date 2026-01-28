@@ -85,7 +85,7 @@ const AccountScreen = ({ navigation }: any) => {
       }
  
       const dealerRes = await fetch(
-        `https://car03.dostenterprises.com/dealer/${dealerId}`,
+        `http://10.98.89.200:8086/dealer/${dealerId}`,
         {
           headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
         },
@@ -95,7 +95,7 @@ const AccountScreen = ({ navigation }: any) => {
       if (dealerRes.ok && dealerJson?.dealerDto) setDealerData(dealerJson.dealerDto);
  
       const photoRes = await fetch(
-        `https://car03.dostenterprises.com/ProfilePhoto/getbyuserid?userId=${userId}`,
+        `http://10.98.89.200:8086/ProfilePhoto/getbyuserid?userId=${userId}`,
         { headers: { Authorization: `Bearer ${token}` } },
       );
  
@@ -143,7 +143,7 @@ const AccountScreen = ({ navigation }: any) => {
  
       setLoading(true);
       const res = await fetch(
-        'https://car03.dostenterprises.com/ProfilePhoto/add',
+        'http://10.98.89.200:8086/ProfilePhoto/add',
         {
           method: 'POST',
           headers: {
@@ -179,7 +179,7 @@ const AccountScreen = ({ navigation }: any) => {
  
       setLoading(true);
       const res = await fetch(
-        `https://car03.dostenterprises.com/ProfilePhoto/deletebyuserid?userId=${userId}`,
+        `http://10.98.89.200:8086/ProfilePhoto/deletebyuserid?userId=${userId}`,
         {
           method: 'DELETE',
           headers: { Authorization: `Bearer ${token}` },
@@ -257,7 +257,7 @@ const AccountScreen = ({ navigation }: any) => {
       setUpdateMessage(null);
 
       const res = await fetch(
-        `https://car03.dostenterprises.com/dealer/updateDealer/${userId}`,
+        `http://10.98.89.200:8086/dealer/updateDealer/${userId}`,
         {
           method: 'PUT',
           headers: {

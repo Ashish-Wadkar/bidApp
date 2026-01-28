@@ -5,7 +5,7 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import dayjs from 'dayjs';
 import duration from 'dayjs/plugin/duration';
 import {useNavigation, NavigationProp} from '@react-navigation/native';
-import useWebSocket from '../../Utilies/websocket';
+import { useWebSocket } from '../../utility/WebSocketConnection';
 
 dayjs.extend(duration);
 
@@ -33,12 +33,20 @@ interface CardProps {
   };
 }
 
+const formatRegistration = (value?: string) => {
+  const raw = String(value || '')
+    .replace(/\s+/g, '')
+    .replace(/-/g, '');
+  const short = raw.slice(0, 4).toUpperCase();
+  return short || '-';
+};
+
 const Card: React.FC<CardProps> = ({cardData}) => {
   const closeTime = cardData.closingTime;
   const [timeLeft, setTimeLeft] = useState('');
   const [highestBid, setHighestBid] = useState<number>(cardData.basePrice);
 
-  const {client, isConnected} = useWebSocket();
+  const {isConnected, liveCars} = useWebSocket();
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
 
   // Timer
@@ -64,25 +72,20 @@ const Card: React.FC<CardProps> = ({cardData}) => {
     return () => clearInterval(timerId);
   }, [closeTime]);
 
-  // WebSocket top bid subscription
+  // Update highest bid from liveCars when WebSocket updates
   useEffect(() => {
-    if (cardData.bidCarId && isConnected && client) {
-      const subscription = client.subscribe(
-        `/topic/topBids/${cardData.bidCarId}`,
-        (message: any) => {
-          const topBid = JSON.parse(message.body);
-          setHighestBid(topBid?.amount);
-        },
+    if (cardData.bidCarId && liveCars && liveCars.length > 0) {
+      const matchingCar = liveCars.find(
+        (car: any) => 
+          String(car.id) === String(cardData.bidCarId) ||
+          String(car.bidCarId) === String(cardData.bidCarId) ||
+          String(car.carId) === String(cardData.bidCarId)
       );
-
-      client.publish({
-        destination: `/app/topBids/${cardData.bidCarId}`,
-        body: JSON.stringify({}),
-      });
-
-      return () => subscription.unsubscribe();
+      if (matchingCar && matchingCar.currentBid) {
+        setHighestBid(matchingCar.currentBid);
+      }
     }
-  }, [cardData.bidCarId, isConnected, client]);
+  }, [cardData.bidCarId, liveCars]);
 
   const remainingMinutes = parseInt(timeLeft.split('m')[0]) || 0;
   const isLastCall = remainingMinutes < 2;
@@ -114,7 +117,7 @@ const Card: React.FC<CardProps> = ({cardData}) => {
           <Text style={styles.tag}>{cardData.kmDriven} km</Text>
           <Text style={styles.tag}>{cardData.ownerSerial} owner</Text>
           <Text style={styles.tag}>{cardData.fuelType}</Text>
-          <Text style={styles.tag}>{cardData.registration}</Text>
+          <Text style={styles.tag}>{formatRegistration(cardData.registration)}</Text>
         </View>
 
         <View style={styles.rowBetween}>

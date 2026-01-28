@@ -582,7 +582,7 @@ const HomeScreen: React.FC = () => {
     keyForState?: string,
   ): Promise<LivePriceData | null> => {
     try {
-      const livePriceUrl = `https://car03.dostenterprises.com/Bid/getliveValue?bidCarId=${bidCarId}`;
+      const livePriceUrl = `http://10.98.89.200:8086/Bid/getliveValue?bidCarId=${bidCarId}`;
       const response = await fetch(livePriceUrl);
       const data = await response.json();
       const rawPrice = data?.object?.price;
@@ -627,7 +627,7 @@ const HomeScreen: React.FC = () => {
     bidCarId: string,
   ) => {
     try {
-      const imageUrl = `https://car03.dostenterprises.com/uploadFileBidCar/getByBidCarID?beadingCarId=${beadingCarId}`;
+      const imageUrl = `http://10.98.89.200:8086/uploadFileBidCar/getByBidCarID?beadingCarId=${beadingCarId}`;
       const imageResponse = await fetch(imageUrl);
       const imageText = await imageResponse.text();
       let imageDataArray: any[] = [];
@@ -650,7 +650,7 @@ const HomeScreen: React.FC = () => {
             item.subtype?.toLowerCase() === 'coverimage') &&
           String(item.beadingCarId) === String(beadingCarId),
       );
-      const carIdUrl = `https://car03.dostenterprises.com/BeadingCarController/getByBidCarId/${bidCarId}`;
+      const carIdUrl = `http://10.98.89.200:8086/BeadingCarController/getByBidCarId/${bidCarId}`;
       const carIdResponse = await fetch(carIdUrl);
       const carIdText = await carIdResponse.text();
       let carIdData: any = null;
@@ -891,7 +891,7 @@ const HomeScreen: React.FC = () => {
         amount: bidValue,
       };
 
-      const bidUrl = `https://car03.dostenterprises.com/Bid/placeBid?bidCarId=${selectedCar.bidCarId}`;
+      const bidUrl = `http://10.98.89.200:8086/Bid/placeBid?bidCarId=${selectedCar.bidCarId}`;
       const response = await fetch(bidUrl, {
         method: 'POST',
         headers: {
@@ -1018,6 +1018,14 @@ const HomeScreen: React.FC = () => {
   };
 
   // === RENDER FUNCTIONS ===
+  const formatRegistration = (value?: string) => {
+    const raw = String(value || '')
+      .replace(/\s+/g, '')
+      .replace(/-/g, '');
+    const short = raw.slice(0, 4).toUpperCase();
+    return short || 'N/A';
+  };
+
   const renderCarCard = (car: Car, idx: number) => {
     const carId = car.id || `car-${idx}`;
     const beadingId = car.beadingCarId || carId;
@@ -1080,7 +1088,7 @@ const HomeScreen: React.FC = () => {
             />
             <Text style={styles.locationTextSmall}>
               {carDetails?.city || car.city || 'Unknown'} •{' '}
-              {carDetails?.registration || car.rtoCode || 'N/A'}
+              {formatRegistration(carDetails?.registration || car.rtoCode)}
             </Text>
           </View>
           <Text style={styles.carInfo}>
@@ -1186,8 +1194,9 @@ const HomeScreen: React.FC = () => {
       carDetails?.ownerSerial || selectedCarForDetails.owner || '2ND OWNER';
     const fuelType =
       carDetails?.fuelType || selectedCarForDetails.fuelType || 'DIESEL';
-    const registration =
+    const registrationFull =
       carDetails?.registration || selectedCarForDetails.rtoCode || 'MH-12';
+    const registration = formatRegistration(registrationFull);
     const city =
       carDetails?.city || selectedCarForDetails.city || 'Kharadi, Kharadi';
     const transmission = carDetails?.transmission || 'Automatic';

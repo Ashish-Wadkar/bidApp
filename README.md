@@ -84,7 +84,88 @@ You've successfully run and modified your React Native App. :partying_face:
 
 # Troubleshooting
 
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
+## USB device not connecting properly
+
+If your phone is plugged in via USB but `yarn android` says **No online devices** or the device shows **offline** or **unauthorized** in `adb devices`:
+
+### 1. On the phone
+
+- **Enable Developer options**: Settings → About phone → tap **Build number** 7 times.
+- **Enable USB debugging**: Settings → Developer options → **USB debugging** → ON.
+- **Use a data cable**: Some cables are charge-only; try another cable or port.
+- **Choose “File transfer” (MTP)** when the USB notification appears (not “Charging only”).
+- **Accept the “Allow USB debugging?”** popup and check “Always allow from this computer” if you see it.
+
+### 2. On Windows (PC)
+
+- **Install/update USB driver**:
+  - Install [Google USB Driver](https://developer.android.com/studio/run/win-usb) or use your phone’s official USB driver (Samsung, Xiaomi, etc.).
+  - Or in Android Studio: **Settings → Appearance & Behavior → System Settings → Android SDK → SDK Tools** → check **Google USB Driver** → Apply.
+- **Try another USB port**: Prefer a direct port on the PC (not through a hub).
+- **Unplug and plug again** after changing settings; wait for the “USB debugging” prompt on the phone.
+
+### 3. Reset ADB and check devices
+
+Run from the project root:
+
+```sh
+# See current status
+yarn android:devices
+
+# If device is offline/unauthorized: restart ADB, then list again
+yarn android:reconnect
+```
+
+Or run manually:
+
+```sh
+adb kill-server
+adb start-server
+adb devices
+```
+
+You want one line like `XXXXXXXX    device` (not `offline` or `unauthorized`).
+
+### 4. If it still shows “unauthorized”
+
+- Unplug the USB cable.
+- On the phone: Settings → Developer options → **Revoke USB debugging authorizations**.
+- Plug the cable back in and accept the “Allow USB debugging?” dialog again.
+- Run `yarn android:devices` (or `adb devices`) and check for `device`.
+
+### 5. Run the app
+
+When `adb devices` shows your device as `device`, run:
+
+```sh
+yarn android
+```
+
+---
+
+## "No online devices found" or "Failed to launch emulator"
+
+When `yarn android` fails with **No online devices found** or **The emulator (Pixel_7) quit before it finished opening**:
+
+1. **Build the APK without a device** (no emulator or USB device needed):
+   ```sh
+   yarn build:android
+   ```
+   The debug APK is created at `android/app/build/outputs/apk/debug/app-debug.apk`. You can install it later when a device or emulator is available.
+
+2. **To run on a device or emulator**, ensure one is online first:
+   - **Emulator**: Start it manually from Android Studio (Device Manager) or run:
+     ```sh
+     C:\Users\<You>\AppData\Local\Android\Sdk\emulator\emulator -avd Pixel_7
+     ```
+   - **Physical device**: Follow the **USB device not connecting properly** steps above, then run `yarn android:devices` to confirm it shows `device`.
+
+3. Then run:
+   ```sh
+   yarn android
+   ```
+
+If you're having other issues, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
 
 # Learn More
 

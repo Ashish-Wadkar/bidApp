@@ -32,7 +32,7 @@ const SteeringSection: React.FC<SteeringSectionProps> = ({ beadingCarId }) => {
     try {
       const docType = 'Steering';
       const response = await fetch(
-        `https://car03.dostenterprises.com/uploadFileBidCar/getBidCarIdType?beadingCarId=${beadingCarId}&docType=${docType}`
+        `http://10.98.89.200:8086/uploadFileBidCar/getBidCarIdType?beadingCarId=${beadingCarId}&docType=${docType}`
       );
       const text = await response.text();
       const data = JSON.parse(text);

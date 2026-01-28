@@ -46,7 +46,7 @@ const ForgotPassword = () => {
 
     try {
       const response = await fetch(
-        '  https://car03.dostenterprises.com/cars/forgot-password',
+        '  http://10.98.89.200:8086/cars/forgot-password',
         {
           method: 'POST',
           headers: {

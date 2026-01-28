@@ -12,7 +12,7 @@ type SocketType = SocketIOClient.Socket;
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // -------- CONFIG --------
-const WS_BASE_URL = 'https://car04.dostenterprises.com';  
+const WS_BASE_URL = 'http://10.98.89.200:8091';  
 const TOKEN_KEY = 'auth_token'; 
 // ------------------------
 

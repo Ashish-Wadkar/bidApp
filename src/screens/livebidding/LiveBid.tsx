@@ -1,8 +1,8 @@
 // components/LiveBid.tsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { View, FlatList } from "react-native";
 import Card from "./cards";
-import useWebSocket from "../../Utilies/websocket";
+import { useWebSocket } from "../../utility/WebSocketConnection";
 
 interface LiveCar {
   bidCarId: string;
@@ -13,18 +13,38 @@ interface LiveCar {
 }
 
 const LiveBid: React.FC = () => {
-  const { getAllLiveCars } = useWebSocket();
-  const [liveCars, setLiveCars] = useState<LiveCar[]>([]);
+  const { liveCars, getLiveCars, isConnected } = useWebSocket();
 
   useEffect(() => {
-    getAllLiveCars(); // You may want to update your hook to set liveCars in state
-  }, []);
+    if (isConnected) {
+      getLiveCars();
+    }
+  }, [isConnected]);
+
+  // Transform liveCars to match Card component's expected format
+  const transformedCars = liveCars.map((car: any) => ({
+    bidCarId: String(car.id || car.bidCarId || car.carId || ''),
+    beadingCarId: String(car.beadingCarId || car.id || ''),
+    basePrice: car.currentBid || car.startingBid || 0,
+    closingTime: car.closingTime || '',
+    year: car.year || '',
+    brand: car.make || car.brand || '',
+    model: car.model || '',
+    kmDriven: car.kmDriven || '',
+    ownerSerial: car.ownerSerial || '',
+    fuelType: car.fuelType || '',
+    registration: car.registration || '',
+    area: car.area || '',
+    city: car.city || '',
+    imageUrl: car.imageUrl || car.image || '',
+    ...car,
+  }));
 
   return (
     <View style={{ flex: 1, padding: 10 }}>
       <FlatList
-        data={liveCars}
-        keyExtractor={(item) => item.bidCarId}
+        data={transformedCars}
+        keyExtractor={(item) => String(item.bidCarId || item.id || Math.random())}
         renderItem={({ item }) => <Card cardData={item} />}
         numColumns={2}
         columnWrapperStyle={{ justifyContent: "space-between", marginBottom: 10 }}

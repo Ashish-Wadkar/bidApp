@@ -16,6 +16,11 @@ import ACSection from './ACSection';
 import ElectricalSection from './ElectricalSection';
 import SteeringSection from './SteeringSection';
 import EngineVideoSection from './EngineVideoSection';
+import TyreSection from './TyreSection';
+import EmergencySection from './EmergencySection';
+import CommentsSection from './CommentsSection';
+import MechanicalSection from './MechanicalSection';
+import InspectionSection from './InspectionSection';
 
 const COLORS = {
   primary: '#262a4f',
@@ -28,13 +33,18 @@ const COLORS = {
 
 const TABS = [
   'Document',
+  'Inspection',
   'Exterior',
+  'Mechanical',
+  'Tyre',
   'Interior',
   'Engine',
   'AC',
   'Electricals',
+  'Emergency',
   'Engine Video',
   'Steering',
+  'Comments',
 ];
 
 const formatDate = (val: string) => {
@@ -58,7 +68,7 @@ const InspectionReport = ({ route, navigation }: any) => {
     setLoading(true);
     try {
       const res = await fetch(
-        `https://car03.dostenterprises.com/inspectionReport/getByBeadingCar?beadingCarId=${beadingCarId}`,
+        `http://10.98.89.200:8086/inspectionReport/getByBeadingCar?beadingCarId=${beadingCarId}`,
       );
       const text = await res.text();
       const data = JSON.parse(text);
@@ -144,13 +154,18 @@ const InspectionReport = ({ route, navigation }: any) => {
 
   const renderSection = () => {
     if (activeTab === 'Document') return renderDocumentSection(report);
+    if (activeTab === 'Inspection') return <InspectionSection beadingCarId={beadingCarId} />;
     if (activeTab === 'Exterior') return <ExteriorSection beadingCarId={beadingCarId} />;
+    if (activeTab === 'Mechanical') return <MechanicalSection beadingCarId={beadingCarId} />;
+    if (activeTab === 'Tyre') return <TyreSection beadingCarId={beadingCarId} />;
     if (activeTab === 'Interior') return <InteriorSection beadingCarId={beadingCarId} />;
     if (activeTab === 'Engine') return <EngineSection beadingCarId={beadingCarId} />;
     if (activeTab === 'AC') return <ACSection beadingCarId={beadingCarId} />;
     if (activeTab === 'Electricals') return <ElectricalSection beadingCarId={beadingCarId} />;
+    if (activeTab === 'Emergency') return <EmergencySection beadingCarId={beadingCarId} />;
     if (activeTab === 'Engine Video') return <EngineVideoSection beadingCarId={beadingCarId} />;
     if (activeTab === 'Steering') return <SteeringSection beadingCarId={beadingCarId} />;
+    if (activeTab === 'Comments') return <CommentsSection beadingCarId={beadingCarId} />;
 
     return renderEmptySection();
   };
